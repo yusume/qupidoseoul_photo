@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PhotoFrame MVP</title>
+  <link rel="stylesheet" href="./style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="left">
+      <select id="layoutSelect">
+        <option value="layout1">layout 1</option>
+        <option value="layout2">layout 2</option>
+        <option value="layout3">layout 3</option>
+        <option value="layout4">layout 4</option>
+        <option value="layoutTest">layout test (red)</option>
+      </select>
+
+      <label class="ctrl">
+        로고색
+        <input id="orPicker" type="color" value="#ffffff" />
+      </label>
+
+      <button id="exportBtn">PNG 저장</button>
+    </div>
+
+    <div class="hint">
+      더블클릭으로만 사진 넣기 · 클릭 후 드래그/확대 가능
+    </div>
+  </header>
+
+  <main class="stage">
+   <div id="canvasWrap" style="position:relative; width:600px;">
+      <canvas id="c"></canvas>
+      <div id="svgOverlay"style="
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+    "></div>
+      <input id="fileInput" type="file" accept="image/*" />
+    </div>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
+

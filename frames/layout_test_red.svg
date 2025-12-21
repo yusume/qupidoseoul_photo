@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1800">
+  <defs>
+    <style>
+      .slot {
+        fill: rgba(255, 0, 0, 0.12);
+        stroke: #ff4d4d;
+        stroke-width: 4;
+      }
+      .label {
+        fill: #ff4d4d;
+        font-family: "Arial", sans-serif;
+        font-size: 40px;
+        font-weight: 700;
+      }
+    </style>
+  </defs>
+  <g>
+    <rect class="slot" x="25" y="25" width="288" height="876" />
+    <text class="label" x="35" y="75">1</text>
+
+    <rect class="slot" x="313" y="25" width="288" height="876" />
+    <text class="label" x="323" y="75">2</text>
+
+    <rect class="slot" x="601" y="24" width="288" height="876" />
+    <text class="label" x="611" y="74">3</text>
+
+    <rect class="slot" x="890" y="24" width="288" height="876" />
+    <text class="label" x="900" y="74">4</text>
+
+    <rect class="slot" x="25" y="900" width="288" height="876" />
+    <text class="label" x="35" y="950">5</text>
+
+    <rect class="slot" x="313" y="901" width="288" height="876" />
+    <text class="label" x="323" y="951">6</text>
+
+    <rect class="slot" x="601" y="900" width="288" height="876" />
+    <text class="label" x="611" y="950">7</text>
+
+    <rect class="slot" x="890" y="900" width="288" height="876" />
+    <text class="label" x="900" y="950">8</text>
+  </g>
+</svg>
