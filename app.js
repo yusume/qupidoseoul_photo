@@ -55,7 +55,7 @@ const layouts = {
   layout1: {
     svg: "./frames/layout 1_memorycard.svg",
     slots: [
-    { x: 12, y: 1, w: 279, h: 385 }, // SLOT 1
+    { x: 10, y: 10, w: 279, h: 385 }, // SLOT 1
     { x: 310, y: 10, w: 279, h: 385 }, // SLOT 2
     { x: 10, y: 413, w: 279, h: 385 }, // SLOT 3
     { x: 310, y: 413, w: 279, h: 385 }, // SLOT 4
@@ -64,7 +64,7 @@ const layouts = {
   layout2: {
     svg: "./frames/layout 2_Keyring.svg",
     slots: [
-          { x: 12, y: 12, w: 144, h: 438 },
+  { x: 12, y: 12, w: 144, h: 438 },
   { x: 156, y: 12, w: 144, h: 438 },
   { x: 300, y: 12, w: 144, h: 438 },
   { x: 444, y: 12, w: 144, h: 438 },
@@ -77,7 +77,7 @@ const layouts = {
   layout3: {
     svg: "./frames/layout 3_ 4*6 full size.svg",
     slots: [
-      { x: 12, y: 12, w: 574, h: 886 },
+      { x: 10, y: 10, w: 574, h: 886 },
     ]
   },
   layout4: {
