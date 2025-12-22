@@ -77,7 +77,7 @@ const layouts = {
   layout3: {
     svg: "./frames/layout 3_ 4*6 full size.svg",
     slots: [
-      { x: 0, y: 0, w: 574, h: 886 },
+      { x: 0, y: 0, w: 600, h: 900 },
     ]
   },
   layout4: {
