@@ -2,8 +2,8 @@
 // PHOTO FRAME - FINAL APP.JS
 // ===============================
 
-const EXPORT_W = 1200;
-const EXPORT_H = 1800;
+const EXPORT_W = 600 ;//1200;
+const EXPORT_H = 900 ; //1800;
 const SVG_URL = "./frames/layout 1_memorycard.svg";
 
 // ===== Canvas =====
