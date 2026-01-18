@@ -375,9 +375,12 @@ async function loadSVGOverlay(url) {
 
   const overlayRoot = svgOverlay.querySelector("svg");
   if (overlayRoot) {
-    const overlayViewBox = parseViewBox(overlayRoot);
-    const epsilon = 1;
-    let bgFill = null;
+    if (!overlayRoot.getAttribute("xmlns")) {
+      overlayRoot.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+    if (!overlayRoot.getAttribute("xmlns:xlink")) {
+      overlayRoot.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    }
     const slotGroups = overlayRoot.querySelectorAll("g.image_box, g#image_box");
     slotGroups.forEach((group) => {
       const elements = Array.from(group.querySelectorAll("rect, use")).filter(
@@ -392,49 +395,6 @@ async function loadSVGOverlay(url) {
         el.style.fillOpacity = "0";
       });
     });
-
-    const backgroundRects = Array.from(overlayRoot.querySelectorAll("rect")).filter(
-      (el) => {
-        if (isInsideDefsOrClip(el)) return false;
-        if (el.closest("g#logo")) return false;
-        if (el.closest("g.image_box, g#image_box")) return false;
-        return true;
-      }
-    );
-
-    backgroundRects.forEach((rect) => {
-      const x = parseFloat(rect.getAttribute("x")) || 0;
-      const y = parseFloat(rect.getAttribute("y")) || 0;
-      const w = parseFloat(rect.getAttribute("width")) || 0;
-      const h = parseFloat(rect.getAttribute("height")) || 0;
-
-      const coversWidth =
-        x <= overlayViewBox.minX + epsilon && w >= overlayViewBox.w - epsilon;
-      const coversHeight =
-        y <= overlayViewBox.minY + epsilon && h >= overlayViewBox.h - epsilon;
-
-      if (coversWidth && coversHeight) {
-        if (!bgFill) {
-          const computed = window.getComputedStyle(rect).fill;
-          if (
-            computed &&
-            computed !== "none" &&
-            computed !== "transparent" &&
-            computed !== "rgba(0, 0, 0, 0)"
-          ) {
-            bgFill = computed;
-          }
-        }
-        rect.style.fill = "none";
-        rect.style.fillOpacity = "0";
-      }
-    });
-
-    if (bgFill) {
-      currentBackground = bgFill;
-    } else {
-      currentBackground = "#111";
-    }
   }
 
   const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
@@ -504,7 +464,7 @@ async function setFrame(fileName) {
 
   activeSlotIndex = null;
   canvas.clear();
-  canvas.setBackgroundColor(currentBackground, canvas.renderAll.bind(canvas));
+  canvas.setBackgroundColor("transparent", canvas.renderAll.bind(canvas));
   canvas.renderAll();
 }
 
@@ -567,6 +527,7 @@ fileInput.addEventListener("change", () => {
       imgEl.setAttribute("preserveAspectRatio", "xMidYMid slice");
       imgEl.setAttribute("clip-path", `url(#${clipId})`);
       imgEl.setAttribute("style", "cursor: move;");
+      imgEl.setAttribute("href", dataUrl);
       imgEl.setAttributeNS("http://www.w3.org/1999/xlink", "href", dataUrl);
 
       const group = slotEl.closest("g.image_box, g#image_box") || overlaySvg;
@@ -585,8 +546,20 @@ if (exportBtn) {
   exportBtn.addEventListener("click", () => {
     const exportW = Math.round((EXPORT_MM_W / MM_PER_INCH) * EXPORT_DPI);
     const exportH = Math.round((EXPORT_MM_H / MM_PER_INCH) * EXPORT_DPI);
-    const svg = svgOverlay.innerHTML;
-    const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const liveSvg = svgOverlay.querySelector("svg");
+    if (!liveSvg) return;
+    const clone = liveSvg.cloneNode(true);
+    if (!clone.getAttribute("xmlns")) {
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+    if (!clone.getAttribute("xmlns:xlink")) {
+      clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    }
+    clone.setAttribute("width", exportW);
+    clone.setAttribute("height", exportH);
+
+    const svgText = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
     const svgUrl = URL.createObjectURL(svgBlob);
 
     const svgImg = new Image();
