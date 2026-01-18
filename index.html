@@ -10,35 +10,18 @@
 <body>
   <header class="topbar">
     <div class="left">
-      <select id="layoutSelect">
-        <option value="layout1">layout 1</option>
-        <option value="layout2">layout 2</option>
-        <option value="layout3">layout 3</option>
-        <option value="layout4">layout 4</option>
-        <option value="layoutTest">layout test (red)</option>
-      </select>
-
+      <select id="layoutSelect"></select>
+      <button id="exportBtn">PNG 저장</button>
       <label class="ctrl">
         로고색
-        <input id="orPicker" type="color" value="#ffffff" />
+        <input id="logoColor" type="color" value="#000000" />
       </label>
-
-      <button id="exportBtn">PNG 저장</button>
-    </div>
-
-    <div class="hint">
-      더블클릭으로만 사진 넣기 · 클릭 후 드래그/확대 가능
     </div>
   </header>
-
   <main class="stage">
-   <div id="canvasWrap" style="position:relative; width:600px;">
+   <div id="canvasWrap" style="position:relative; width:100mm; height:150mm;">
       <canvas id="c"></canvas>
-      <div id="svgOverlay"style="
-      position:absolute;
-      inset:0;
-      pointer-events:none;
-    "></div>
+      <div id="svgOverlay" style="position:absolute; inset:0;"></div>
       <input id="fileInput" type="file" accept="image/*" />
     </div>
   </main>
@@ -46,4 +29,3 @@
   <script src="./app.js"></script>
 </body>
 </html>
-
