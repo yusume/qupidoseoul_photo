@@ -601,11 +601,14 @@ if (logoColorInput) {
     });
 
     layoutSelect.addEventListener("change", (e) => {
-      setFrame(e.target.value);
+     
 
-      if (fileName.includes("layout3_TOP") || fileName.includes("layout3_bottom")) {
-        logoColorInput.value = "#ffffff";
-        updateLogoColor("#ffffff");
+        const fileName = e.target.value;
+        setFrame(fileName);
+
+        if (fileName.includes("layout3_TOP") || fileName.includes("layout3_bottom")) {
+            logoColorInput.value = "#ffffff";
+            updateLogoColor("#ffffff");
         }
 
     });
