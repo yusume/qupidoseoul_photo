@@ -1,20 +1,8 @@
-// Assuming the existing code structure and the relevant part of app.js
-document.querySelector('select.layoutSelect').addEventListener('change', function(event) {
-    let selectedLayout = event.target.value;
-    let logoColor;
-
-    // Check for specific layouts
-    if (selectedLayout === 'layout3_TOP' || selectedLayout === 'layout3_bottom') {
-        logoColor = '#ffffff'; // Set logo color to white
+// Assuming you have a layoutSelect element and a logo element
+layoutSelect.addEventListener('change', function() {
+    if (layoutSelect.value === 'layout3_TOP' || layoutSelect.value === 'layout3_bottom') {
+        logo.style.color = '#ffffff';
     } else {
-        logoColor = determineDefaultLogoColor(selectedLayout); // Custom function to define default color based on layout
+        logo.style.color = ''; // Reset or set to the default color
     }
-
-    // Assume there's a function to update the logo's color
-    updateLogoColor(logoColor);
 });
-
-function updateLogoColor(color) {
-    const logo = document.querySelector('.logo');
-    logo.style.color = color;
-}
