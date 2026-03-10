@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_레이어_1" data-name="레이어 1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.5 425.2">
+  <defs>
+    <style>
+      .cls-1 {
+        stroke: #c9caca;
+        stroke-width: .2px;
+      }
+
+      .cls-1, .cls-2 {
+        fill: none;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-2 {
+        stroke: #000;
+        stroke-width: .1px;
+      }
+    </style>
+  </defs>
+  <g id="guide">
+    <g>
+      <g>
+        <g>
+          <line class="cls-1" x1="276.4" y1="0" x2="290.6" y2="0"/>
+          <line class="cls-1" x1="283.5" y1="7.1" x2="283.5" y2="-7.1"/>
+        </g>
+        <g>
+          <line class="cls-1" x1="276.4" y1="425.2" x2="290.6" y2="425.2"/>
+          <line class="cls-1" x1="283.5" y1="432.3" x2="283.5" y2="418.1"/>
+        </g>
+      </g>
+      <g>
+        <g>
+          <line class="cls-1" x1="-7.1" y1="0" x2="7.1" y2="0"/>
+          <line class="cls-1" y1="7.1" y2="-7.1"/>
+        </g>
+        <g>
+          <line class="cls-1" x1="-7.1" y1="425.2" x2="7.1" y2="425.2"/>
+          <line class="cls-1" y1="432.3" y2="418.1"/>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g>
+    <rect class="cls-2" x="141.7" y="14.2" width="127.6" height="99.2"/>
+    <rect class="cls-2" x="141.7" y="113.4" width="127.6" height="99.2"/>
+    <rect class="cls-2" x="141.7" y="212.6" width="127.6" height="99.2"/>
+    <rect class="cls-2" x="141.7" y="311.9" width="127.6" height="99.2"/>
+    <rect class="cls-2" x="14.2" y="14.2" width="127.6" height="99.2"/>
+    <rect class="cls-2" x="14.2" y="113.4" width="127.6" height="99.2"/>
+    <rect class="cls-2" x="14.2" y="212.6" width="127.6" height="99.2"/>
+    <rect class="cls-2" x="14.2" y="311.9" width="127.6" height="99.2"/>
+  </g>
+</svg>
