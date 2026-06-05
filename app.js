@@ -18,6 +18,15 @@ const layoutSelect = document.getElementById("layoutSelect");
 const exportBtn = document.getElementById("exportBtn");
 const logoColorInput = document.getElementById("logoColor");
 
+// layout4_id 전용 DOM 요소
+const idLayoutCtrls = document.getElementById("idLayoutCtrls");
+const rotateLeftBtn = document.getElementById("rotateLeftBtn");
+const flipLeftBtn = document.getElementById("flipLeftBtn");
+const flipVLeftBtn = document.getElementById("flipVLeftBtn"); // 상하반전 추가
+const rotateRightBtn = document.getElementById("rotateRightBtn");
+const flipRightBtn = document.getElementById("flipRightBtn");
+const flipVRightBtn = document.getElementById("flipVRightBtn"); // 상하반전 추가
+
 const EXPORT_DPI = 300;
 const EXPORT_MM_W = 100;
 const EXPORT_MM_H = 150;
@@ -28,6 +37,13 @@ const slots = [];
 let activeSlotIndex = null;
 let currentBackground = "#111";
 let dragState = null;
+let currentLayoutName = "";
+
+// layout4_id 상태 관리 (35x45 구역 및 30x40 구역 독립 제어)
+const idLayoutState = {
+  "35x45": { dataUrl: null, rotate: 0, flipX: false, flipY: false },
+  "30x40": { dataUrl: null, rotate: 0, flipX: false, flipY: false }
+};
 
 function parseViewBox(svgEl) {
   const viewBox = svgEl.getAttribute("viewBox");
@@ -117,57 +133,66 @@ function getSvgPoint(svgEl, clientX, clientY) {
 }
 
 function extractSlots(svgRoot, viewBox) {
-  const groups = svgRoot.querySelectorAll("g.image_box, g#image_box");
+  let elements = [];
+  
+  if (currentLayoutName.includes("layout4_id")) {
+    elements = Array.from(svgRoot.querySelectorAll("rect, use")).filter(
+      (el) => !isInsideDefsOrClip(el)
+    );
+  } else {
+    const groups = svgRoot.querySelectorAll("g.image_box, g#image_box");
+    groups.forEach((group) => {
+      const rawElements = Array.from(group.querySelectorAll("rect, use")).filter(
+        (el) => !isInsideDefsOrClip(el)
+      );
+      const idFiltered = rawElements.filter((el) =>
+        /^image_box_/i.test(el.getAttribute("id") || "")
+      );
+      elements.push(...(idFiltered.length ? idFiltered : rawElements));
+    });
+  }
+
   const out = [];
   let slotIndex = 1;
 
-  groups.forEach((group) => {
-    const rawElements = Array.from(group.querySelectorAll("rect, use")).filter(
-      (el) => !isInsideDefsOrClip(el)
-    );
-    const idFiltered = rawElements.filter((el) =>
-      /^image_box_/i.test(el.getAttribute("id") || "")
-    );
-    const elements = idFiltered.length ? idFiltered : rawElements;
+  elements.forEach((el) => {
+    const tag = el.tagName.toLowerCase();
+    let rect = null;
 
-    elements.forEach((el) => {
-      const tag = el.tagName.toLowerCase();
-      let rect = null;
+    if (tag === "rect") {
+      rect = {
+        x: parseFloat(el.getAttribute("x")) || 0,
+        y: parseFloat(el.getAttribute("y")) || 0,
+        w: parseFloat(el.getAttribute("width")) || 0,
+        h: parseFloat(el.getAttribute("height")) || 0,
+      };
+    } else if (tag === "use") {
+      const x = el.getAttribute("x");
+      const y = el.getAttribute("y");
+      const w = el.getAttribute("width");
+      const h = el.getAttribute("height");
 
-      if (tag === "rect") {
+      if (x !== null || y !== null || w !== null || h !== null) {
         rect = {
-          x: parseFloat(el.getAttribute("x")) || 0,
-          y: parseFloat(el.getAttribute("y")) || 0,
-          w: parseFloat(el.getAttribute("width")) || 0,
-          h: parseFloat(el.getAttribute("height")) || 0,
+          x: parseFloat(x) || 0,
+          y: parseFloat(y) || 0,
+          w: parseFloat(w) || 0,
+          h: parseFloat(h) || 0,
         };
-      } else if (tag === "use") {
-        const x = el.getAttribute("x");
-        const y = el.getAttribute("y");
-        const w = el.getAttribute("width");
-        const h = el.getAttribute("height");
-
-        if (x !== null || y !== null || w !== null || h !== null) {
-          rect = {
-            x: parseFloat(x) || 0,
-            y: parseFloat(y) || 0,
-            w: parseFloat(w) || 0,
-            h: parseFloat(h) || 0,
-          };
-        } else {
-          rect = resolveUseRect(el, svgRoot);
-        }
+      } else {
+        rect = resolveUseRect(el, svgRoot);
       }
+    }
 
-      if (!rect) return;
+    if (!rect || rect.w < 10 || rect.h < 10) return;
+    if (rect.w >= viewBox.w && rect.h >= viewBox.h) return; 
 
-      out.push({
-        id: `slot${slotIndex++}`,
-        x: rect.x - viewBox.minX,
-        y: rect.y - viewBox.minY,
-        w: rect.w,
-        h: rect.h,
-      });
+    out.push({
+      id: `slot${slotIndex++}`,
+      x: rect.x - viewBox.minX,
+      y: rect.y - viewBox.minY,
+      w: rect.w,
+      h: rect.h,
     });
   });
 
@@ -175,19 +200,23 @@ function extractSlots(svgRoot, viewBox) {
 }
 
 function assignSlotMarkers(overlayRoot, slotsList) {
-  const groups = overlayRoot.querySelectorAll("g.image_box, g#image_box");
-  const elements = [];
-
-  groups.forEach((group) => {
-    const rawElements = Array.from(group.querySelectorAll("rect, use")).filter(
-      (el) => !isInsideDefsOrClip(el)
+  let elements = [];
+  if (currentLayoutName.includes("layout4_id")) {
+    elements = Array.from(overlayRoot.querySelectorAll("rect, use")).filter(
+      (el) => !isInsideDefsOrClip(el) && (parseFloat(el.getAttribute("width")) >= 10 || el.tagName.toLowerCase() === 'use')
     );
-    const idFiltered = rawElements.filter((el) =>
-      /^image_box_/i.test(el.getAttribute("id") || "")
-    );
-    const list = idFiltered.length ? idFiltered : rawElements;
-    list.forEach((el) => elements.push(el));
-  });
+  } else {
+    const groups = overlayRoot.querySelectorAll("g.image_box, g#image_box");
+    groups.forEach((group) => {
+      const rawElements = Array.from(group.querySelectorAll("rect, use")).filter(
+        (el) => !isInsideDefsOrClip(el)
+      );
+      const idFiltered = rawElements.filter((el) =>
+        /^image_box_/i.test(el.getAttribute("id") || "")
+      );
+      elements.push(...(idFiltered.length ? idFiltered : rawElements));
+    });
+  }
 
   slotsList.forEach((slot, index) => {
     const el = elements[index];
@@ -232,12 +261,32 @@ function ensureDefs(svgRoot) {
   return defs;
 }
 
+function rotateImage90Deg(srcDataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = img.height;
+      tempCanvas.height = img.width;
+      
+      const ctx = tempCanvas.getContext("2d");
+      ctx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+      ctx.rotate((90 * Math.PI) / 180);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      
+      resolve(tempCanvas.toDataURL("image/png"));
+    };
+    img.src = srcDataUrl;
+  });
+}
+
 function bringLogoToFront(svgRoot) {
   const logo = svgRoot.querySelector("#logo");
   if (!logo) return;
   logo.parentNode.appendChild(logo);
 }
 
+// 로고 색상 업데이트
 function updateLogoColor(color, svgRoot) {
   const root = svgRoot || svgOverlay.querySelector("svg");
   if (!root) return;
@@ -262,6 +311,45 @@ function clampImageToSlot(slot, rect) {
     x: Math.min(maxX, Math.max(minX, rect.x)),
     y: Math.min(maxY, Math.max(minY, rect.y)),
   };
+}
+
+function getIdLayoutGroup(slot, viewBox) {
+  const middleX = viewBox.w / 2;
+  return (slot.x + slot.w / 2) < middleX ? "35x45" : "30x40";
+}
+
+// 상하반전(flipY) 기능이 추가 반영된 변형 연산기
+function applyImageTransform(imgEl, groupKey, slot) {
+  const state = idLayoutState[groupKey];
+  if (!state) return;
+
+  const wrapperGroup = imgEl.parentElement;
+  if (!wrapperGroup || wrapperGroup.tagName.toLowerCase() !== "g") return;
+
+  const cx = slot.x + slot.w / 2;
+  const cy = slot.y + slot.h / 2;
+
+  let transformString = "";
+  
+  if (state.rotate !== 0) {
+    transformString += `rotate(${state.rotate}, ${cx}, ${cy}) `;
+  }
+  
+  // 좌우 반전 적용
+  if (state.flipX) {
+    transformString += `translate(${cx}, ${cy}) scale(-1, 1) translate(${-cx}, ${-cy}) `;
+  }
+
+  // 상하 반전 적용 (추가)
+  if (state.flipY) {
+    transformString += `translate(${cx}, ${cy}) scale(1, -1) translate(${-cx}, ${-cy}) `;
+  }
+
+  if (transformString.trim()) {
+    wrapperGroup.setAttribute("transform", transformString.trim());
+  } else {
+    wrapperGroup.removeAttribute("transform");
+  }
 }
 
 function bindSvgEvents(overlaySvg) {
@@ -305,15 +393,66 @@ function bindSvgEvents(overlaySvg) {
     if (!dragState || dragState.pointerId !== e.pointerId) return;
     const { target, slot, start, rect } = dragState;
     const p = getSvgPoint(overlaySvg, e.clientX, e.clientY);
-    const nextRect = {
-      x: rect.x + (p.x - start.x),
-      y: rect.y + (p.y - start.y),
-      w: rect.w,
-      h: rect.h,
-    };
-    const clamped = clampImageToSlot(slot, nextRect);
-    target.setAttribute("x", clamped.x);
-    target.setAttribute("y", clamped.y);
+    
+    const deltaX = p.x - start.x;
+    const deltaY = p.y - start.y;
+    
+    if (currentLayoutName.includes("layout4_id")) {
+      const viewBox = parseViewBox(overlaySvg);
+      const targetGroup = getIdLayoutGroup(slot, viewBox);
+      const state = idLayoutState[targetGroup];
+
+      let correctedDx = deltaX;
+      let correctedDy = deltaY;
+      
+      if (state.rotate === 90) {
+        correctedDx = deltaY;
+        correctedDy = -deltaX;
+      } else if (state.rotate === 180) {
+        correctedDx = -deltaX;
+        correctedDy = -deltaY;
+      } else if (state.rotate === 270) {
+        correctedDx = -deltaY;
+        correctedDy = deltaX;
+      }
+      if (state.flipX) {
+        correctedDx = -correctedDx;
+      }
+      if (state.flipY) { // 상하반전 드래그 축 보정
+        correctedDy = -correctedDy;
+      }
+
+      const nextRect = {
+        x: rect.x + correctedDx,
+        y: rect.y + correctedDy,
+        w: rect.w,
+        h: rect.h,
+      };
+      const clamped = clampImageToSlot(slot, nextRect);
+      
+      slots.forEach((s) => {
+        if (getIdLayoutGroup(s, viewBox) === targetGroup) {
+          const imgEl = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
+          if (imgEl) {
+            const offsetX = clamped.x - slot.x;
+            const offsetY = clamped.y - slot.y;
+            
+            imgEl.setAttribute("x", s.x + offsetX);
+            imgEl.setAttribute("y", s.y + offsetY);
+          }
+        }
+      });
+    } else {
+      const nextRect = {
+        x: rect.x + deltaX,
+        y: rect.y + deltaY,
+        w: rect.w,
+        h: rect.h,
+      };
+      const clamped = clampImageToSlot(slot, nextRect);
+      target.setAttribute("x", clamped.x);
+      target.setAttribute("y", clamped.y);
+    }
   });
 
   overlaySvg.addEventListener("pointerup", () => {
@@ -360,11 +499,110 @@ function bindSvgEvents(overlaySvg) {
     };
     const clamped = clampImageToSlot(slot, nextRect);
 
-    target.setAttribute("x", clamped.x);
-    target.setAttribute("y", clamped.y);
-    target.setAttribute("width", nextW);
-    target.setAttribute("height", nextH);
+    if (currentLayoutName.includes("layout4_id")) {
+      const viewBox = parseViewBox(overlaySvg);
+      const targetGroup = getIdLayoutGroup(slot, viewBox);
+      
+      slots.forEach((s) => {
+        if (getIdLayoutGroup(s, viewBox) === targetGroup) {
+          const imgEl = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
+          if (imgEl) {
+            const offsetX = clamped.x - slot.x;
+            const offsetY = clamped.y - slot.y;
+            
+            imgEl.setAttribute("x", s.x + offsetX);
+            imgEl.setAttribute("y", s.y + offsetY);
+            imgEl.setAttribute("width", nextW);
+            imgEl.setAttribute("height", nextH);
+          }
+        }
+      });
+    } else {
+      target.setAttribute("x", clamped.x);
+      target.setAttribute("y", clamped.y);
+      target.setAttribute("width", nextW);
+      target.setAttribute("height", nextH);
+    }
   });
+}
+
+function renderImageToSlot(overlaySvg, s, dataUrl, groupKey) {
+  const slotEl = overlaySvg.querySelector(`[data-slot="${s.id}"]`);
+  if (!slotEl) return;
+
+  const rect = getSlotRectFromElement(slotEl, overlaySvg);
+  if (!rect) return;
+
+  const img = new Image();
+  img.onload = () => {
+    const naturalW = img.naturalWidth || rect.w;
+    const naturalH = img.naturalHeight || rect.h;
+    const scale = Math.max(rect.w / naturalW, rect.h / naturalH);
+    const w = naturalW * scale;
+    const h = naturalH * scale;
+    const x = rect.x + (rect.w - w) / 2;
+    const y = rect.y + (rect.h - h) / 2;
+
+    const defs = ensureDefs(overlaySvg);
+    const clipId = `clip-${s.id}`;
+    let clipPath = overlaySvg.querySelector(`#${clipId}`);
+    if (!clipPath) {
+      clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+      clipPath.setAttribute("id", clipId);
+      defs.appendChild(clipPath);
+    } else {
+      clipPath.innerHTML = "";
+    }
+
+    const clipRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    clipRect.setAttribute("x", rect.x);
+    clipRect.setAttribute("y", rect.y);
+    clipRect.setAttribute("width", rect.w);
+    clipRect.setAttribute("height", rect.h);
+    clipPath.appendChild(clipRect);
+
+    const existing = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
+    if (existing) {
+      const parentNode = existing.parentElement;
+      if (parentNode && parentNode.tagName.toLowerCase() === "g" && parentNode.getAttribute("data-wrapper") === s.id) {
+        parentNode.remove();
+      } else {
+        existing.remove();
+      }
+    }
+
+    const wrapperGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    wrapperGroup.setAttribute("data-wrapper", s.id);
+    wrapperGroup.setAttribute("clip-path", `url(#${clipId})`);
+
+    const imgEl = document.createElementNS("http://www.w3.org/2000/svg", "image");
+    imgEl.setAttribute("data-slot", s.id);
+    imgEl.setAttribute("data-natural-w", String(naturalW));
+    imgEl.setAttribute("data-natural-h", String(naturalH));
+    imgEl.setAttribute("x", x);
+    imgEl.setAttribute("y", y);
+    imgEl.setAttribute("width", w);
+    imgEl.setAttribute("height", h);
+    imgEl.setAttribute("preserveAspectRatio", "xMidYMid slice");
+    imgEl.setAttribute("style", "cursor: move;");
+    imgEl.setAttribute("href", dataUrl);
+    imgEl.setAttributeNS("http://www.w3.org/1999/xlink", "href", dataUrl);
+
+    wrapperGroup.appendChild(imgEl);
+
+    const group = slotEl.closest("g.image_box, g#image_box") || overlaySvg;
+    group.appendChild(wrapperGroup);
+
+    if (currentLayoutName.includes("layout4_id") && groupKey) {
+      applyImageTransform(imgEl, groupKey, s);
+    }
+
+    bringLogoToFront(overlaySvg);
+    if (logoColorInput) {
+      updateLogoColor(logoColorInput.value, overlaySvg);
+    }
+  };
+  img.src = dataUrl;
 }
 
 async function loadSVGOverlay(url) {
@@ -455,6 +693,7 @@ async function listFrameFiles() {
 }
 
 async function setFrame(fileName) {
+  currentLayoutName = fileName;
   const url = `${FRAME_DIR}/${encodeURIComponent(fileName)}`;
   const { viewBox, slots: parsedSlots } = await loadSVGOverlay(url);
   setCanvasSize(viewBox.w, viewBox.h);
@@ -466,81 +705,105 @@ async function setFrame(fileName) {
   canvas.clear();
   canvas.setBackgroundColor("transparent", canvas.renderAll.bind(canvas));
   canvas.renderAll();
+
+  if (fileName.includes("layout4_id")) {
+    idLayoutCtrls.style.display = "flex";
+    
+    const overlaySvg = svgOverlay.querySelector("svg");
+    if (overlaySvg) {
+      slots.forEach((s) => {
+        const groupKey = getIdLayoutGroup(s, viewBox);
+        if (idLayoutState[groupKey].dataUrl) {
+          renderImageToSlot(overlaySvg, s, idLayoutState[groupKey].dataUrl, groupKey);
+        }
+      });
+    }
+  } else {
+    idLayoutCtrls.style.display = "none";
+  }
 }
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   if (!file || activeSlotIndex === null) return;
 
-  const s = slots[activeSlotIndex];
   const reader = new FileReader();
-  reader.onload = () => {
-    const dataUrl = reader.result;
+  reader.onload = async () => {
+    let dataUrl = reader.result;
     const overlaySvg = svgOverlay.querySelector("svg");
     if (!overlaySvg) return;
 
-    const slotEl = overlaySvg.querySelector(`[data-slot="${s.id}"]`);
-    if (!slotEl) return;
-
-    const rect = getSlotRectFromElement(slotEl, overlaySvg);
-    if (!rect) return;
-
-    const img = new Image();
-    img.onload = () => {
-      const naturalW = img.naturalWidth || rect.w;
-      const naturalH = img.naturalHeight || rect.h;
-      const scale = Math.max(rect.w / naturalW, rect.h / naturalH);
-      const w = naturalW * scale;
-      const h = naturalH * scale;
-      const x = rect.x + (rect.w - w) / 2;
-      const y = rect.y + (rect.h - h) / 2;
-
-      const defs = ensureDefs(overlaySvg);
-      const clipId = `clip-${s.id}`;
-      let clipPath = overlaySvg.querySelector(`#${clipId}`);
-      if (!clipPath) {
-        clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
-        clipPath.setAttribute("id", clipId);
-        defs.appendChild(clipPath);
-      } else {
-        clipPath.innerHTML = "";
+    if (currentLayoutName.includes("layout4_id")) {
+      const viewBox = parseViewBox(overlaySvg);
+      const selectedSlot = slots[activeSlotIndex];
+      const targetGroup = getIdLayoutGroup(selectedSlot, viewBox);
+      
+      if (targetGroup === "35x45") {
+        dataUrl = await rotateImage90Deg(dataUrl);
       }
+      
+      idLayoutState[targetGroup].dataUrl = dataUrl;
 
-      const clipRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      clipRect.setAttribute("x", rect.x);
-      clipRect.setAttribute("y", rect.y);
-      clipRect.setAttribute("width", rect.w);
-      clipRect.setAttribute("height", rect.h);
-      clipPath.appendChild(clipRect);
-
-      const existing = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
-      if (existing) existing.remove();
-
-      const imgEl = document.createElementNS("http://www.w3.org/2000/svg", "image");
-      imgEl.setAttribute("data-slot", s.id);
-      imgEl.setAttribute("data-natural-w", String(naturalW));
-      imgEl.setAttribute("data-natural-h", String(naturalH));
-      imgEl.setAttribute("x", x);
-      imgEl.setAttribute("y", y);
-      imgEl.setAttribute("width", w);
-      imgEl.setAttribute("height", h);
-      imgEl.setAttribute("preserveAspectRatio", "xMidYMid slice");
-      imgEl.setAttribute("clip-path", `url(#${clipId})`);
-      imgEl.setAttribute("style", "cursor: move;");
-      imgEl.setAttribute("href", dataUrl);
-      imgEl.setAttributeNS("http://www.w3.org/1999/xlink", "href", dataUrl);
-
-      const group = slotEl.closest("g.image_box, g#image_box") || overlaySvg;
-      group.appendChild(imgEl);
-      bringLogoToFront(overlaySvg);
-      if (logoColorInput) {
-        updateLogoColor(logoColorInput.value, overlaySvg);
-      }
-    };
-    img.src = dataUrl;
+      slots.forEach((s) => {
+        if (getIdLayoutGroup(s, viewBox) === targetGroup) {
+          renderImageToSlot(overlaySvg, s, dataUrl, targetGroup);
+        }
+      });
+    } else {
+      const s = slots[activeSlotIndex];
+      renderImageToSlot(overlaySvg, s, dataUrl, null);
+    }
   };
   reader.readAsDataURL(file);
 });
+
+function updateGroupTransforms(groupKey) {
+  const overlaySvg = svgOverlay.querySelector("svg");
+  if (!overlaySvg) return;
+  const viewBox = parseViewBox(overlaySvg);
+
+  slots.forEach((s) => {
+    if (getIdLayoutGroup(s, viewBox) === groupKey) {
+      const imgEl = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
+      if (imgEl) {
+        applyImageTransform(imgEl, groupKey, s);
+      }
+    }
+  });
+}
+
+// 35x45 컨트롤 핸들러
+rotateLeftBtn.addEventListener("click", () => {
+  idLayoutState["35x45"].rotate = (idLayoutState["35x45"].rotate + 90) % 360;
+  updateGroupTransforms("35x45");
+});
+
+flipLeftBtn.addEventListener("click", () => {
+  idLayoutState["35x45"].flipX = !idLayoutState["35x45"].flipX;
+  updateGroupTransforms("35x45");
+});
+
+flipVLeftBtn.addEventListener("click", () => { // 상하반전 핸들러 추가
+  idLayoutState["35x45"].flipY = !idLayoutState["35x45"].flipY;
+  updateGroupTransforms("35x45");
+});
+
+// 30x40 컨트롤 핸들러
+rotateRightBtn.addEventListener("click", () => {
+  idLayoutState["30x40"].rotate = (idLayoutState["30x40"].rotate + 90) % 360;
+  updateGroupTransforms("30x40");
+});
+
+flipRightBtn.addEventListener("click", () => {
+  idLayoutState["30x40"].flipX = !idLayoutState["30x40"].flipX;
+  updateGroupTransforms("30x40");
+});
+
+flipVRightBtn.addEventListener("click", () => { // 상하반전 핸들러 추가
+  idLayoutState["30x40"].flipY = !idLayoutState["30x40"].flipY;
+  updateGroupTransforms("30x40");
+});
+
 
 if (exportBtn) {
   exportBtn.addEventListener("click", () => {
@@ -601,8 +864,6 @@ if (logoColorInput) {
     });
 
     layoutSelect.addEventListener("change", (e) => {
-     
-
         const fileName = e.target.value;
         setFrame(fileName);
 
@@ -610,7 +871,6 @@ if (logoColorInput) {
             logoColorInput.value = "#ffffff";
             updateLogoColor("#ffffff");
         }
-
     });
   }
 

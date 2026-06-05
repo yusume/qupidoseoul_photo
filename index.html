@@ -17,6 +17,21 @@
         <input id="logoColor" type="color" value="#000000" />
       </label>
     </div>
+    
+    <div id="idLayoutCtrls" style="display: none; gap: 15px; align-items: center;">
+      <div style="border-right: 1px solid var(--border); padding-right: 10px; display: flex; gap: 5px; align-items: center;">
+        <span style="font-size: 12px; color: var(--muted); font-weight: bold;">[35x45 사진 전체]:</span>
+        <!-- <button id="rotateLeftBtn" style="height:28px; padding:0 6px; font-size:12px;">90도 회전</button> -->
+        <button id="flipLeftBtn" style="height:28px; padding:0 6px; font-size:12px;">좌우반전</button>
+        <button id="flipVLeftBtn" style="height:28px; padding:0 6px; font-size:12px;">상하반전</button>
+      </div>
+      <div style="display: flex; gap: 5px; align-items: center;">
+        <span style="font-size: 12px; color: var(--muted); font-weight: bold;">[30x40 사진 전체]:</span>
+        <!-- <button id="rotateRightBtn" style="height:28px; padding:0 6px; font-size:12px;">90도 회전</button> -->
+        <button id="flipRightBtn" style="height:28px; padding:0 6px; font-size:12px;">좌우반전</button>
+        <button id="flipVRightBtn" style="height:28px; padding:0 6px; font-size:12px;">상하반전</button>
+      </div>
+    </div>
   </header>
   <main class="stage">
    <div id="canvasWrap" style="position:relative; width:100mm; height:150mm;">
