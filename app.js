@@ -18,7 +18,7 @@ const layoutSelect = document.getElementById("layoutSelect");
 const exportBtn = document.getElementById("exportBtn");
 const logoColorInput = document.getElementById("logoColor");
 
-// layout4_id 전용 DOM 요소 (회전 버튼 변수 제거)
+// layout4_id 및 layout4_id_v2 전용 DOM 요소
 const idLayoutCtrls = document.getElementById("idLayoutCtrls");
 const flipLeftBtn = document.getElementById("flipLeftBtn");
 const flipVLeftBtn = document.getElementById("flipVLeftBtn");
@@ -37,11 +37,16 @@ let currentBackground = "#111";
 let dragState = null;
 let currentLayoutName = "";
 
-// layout4_id 상태 관리 (rotate 상태값 제거)
+// ID 레이아웃 상태 관리 (35x45: box1~9 증명, 30x40: box10~11 여권)
 const idLayoutState = {
-  "35x45": { dataUrl: null, flipX: false, flipY: false },
-  "30x40": { dataUrl: null, flipX: false, flipY: false }
+  "35x45": { dataUrl: null, flipX: false, flipY: false }, 
+  "30x40": { dataUrl: null, flipX: false, flipY: false }  
 };
+
+// layout4_id 계열 레이아웃을 감지하는 헬퍼 함수
+function isIdLayoutMode(layoutName) {
+  return layoutName.includes("layout4_id") || layoutName.includes("layout4_id_v2");
+}
 
 function parseViewBox(svgEl) {
   const viewBox = svgEl.getAttribute("viewBox");
@@ -79,17 +84,25 @@ function getHref(el) {
   );
 }
 
-// 사각형 영역 해석
+// 사각형 영역 해석 및 태그 구조별 고유 ID 수집 알고리즘 보완
 function resolveUseRect(useEl, svgRoot) {
   const href = getHref(useEl);
   if (!href || !href.startsWith("#")) return null;
   const target = svgRoot.querySelector(href);
   if (!target || target.tagName.toLowerCase() !== "rect") return null;
+  
+  // 1순위: use 태그 자체 ID, 2순위: 참조 대상 rect ID, 3순위: 상위 부모 레이어 ID
+  let resolvedId = useEl.getAttribute("id") || target.getAttribute("id") || "";
+  if (!resolvedId && useEl.parentElement) {
+    resolvedId = useEl.parentElement.getAttribute("id") || "";
+  }
+
   return {
     x: parseFloat(target.getAttribute("x")) || 0,
     y: parseFloat(target.getAttribute("y")) || 0,
     w: parseFloat(target.getAttribute("width")) || 0,
     h: parseFloat(target.getAttribute("height")) || 0,
+    svgId: resolvedId
   };
 }
 
@@ -134,7 +147,7 @@ function getSvgPoint(svgEl, clientX, clientY) {
 function extractSlots(svgRoot, viewBox) {
   let elements = [];
   
-  if (currentLayoutName.includes("layout4_id")) {
+  if (isIdLayoutMode(currentLayoutName)) {
     elements = Array.from(svgRoot.querySelectorAll("rect, use")).filter(
       (el) => !isInsideDefsOrClip(el)
     );
@@ -157,6 +170,12 @@ function extractSlots(svgRoot, viewBox) {
   elements.forEach((el) => {
     const tag = el.tagName.toLowerCase();
     let rect = null;
+    
+    //use 태그나 부모 <g> 태그에 ID가 누락되는 현상을 방지하는 정밀 추적 필터
+    let svgId = el.getAttribute("id") || "";
+    if (!svgId && el.parentElement) {
+      svgId = el.parentElement.getAttribute("id") || "";
+    }
 
     if (tag === "rect") {
       rect = {
@@ -164,6 +183,7 @@ function extractSlots(svgRoot, viewBox) {
         y: parseFloat(el.getAttribute("y")) || 0,
         w: parseFloat(el.getAttribute("width")) || 0,
         h: parseFloat(el.getAttribute("height")) || 0,
+        svgId: svgId
       };
     } else if (tag === "use") {
       const x = el.getAttribute("x");
@@ -177,6 +197,7 @@ function extractSlots(svgRoot, viewBox) {
           y: parseFloat(y) || 0,
           w: parseFloat(w) || 0,
           h: parseFloat(h) || 0,
+          svgId: svgId
         };
       } else {
         rect = resolveUseRect(el, svgRoot);
@@ -192,6 +213,7 @@ function extractSlots(svgRoot, viewBox) {
       y: rect.y - viewBox.minY,
       w: rect.w,
       h: rect.h,
+      svgId: rect.svgId || svgId 
     });
   });
 
@@ -200,7 +222,7 @@ function extractSlots(svgRoot, viewBox) {
 
 function assignSlotMarkers(overlayRoot, slotsList) {
   let elements = [];
-  if (currentLayoutName.includes("layout4_id")) {
+  if (isIdLayoutMode(currentLayoutName)) {
     elements = Array.from(overlayRoot.querySelectorAll("rect, use")).filter(
       (el) => !isInsideDefsOrClip(el) && (parseFloat(el.getAttribute("width")) >= 10 || el.tagName.toLowerCase() === 'use')
     );
@@ -300,26 +322,40 @@ function updateLogoColor(color, svgRoot) {
   });
 }
 
-// 여백 1px 반영 범위 계산기
+// 사방 여백 3px 마진 제한 수식
 function clampImageToSlot(slot, rect) {
-  const innerW = slot.w - 2;
-  const innerH = slot.h - 2;
-  const minX = (slot.x + 1) + innerW - rect.w;
-  const minY = (slot.y + 1) + innerH - rect.h;
-  const maxX = (slot.x + 1);
-  const maxY = (slot.y + 1);
+  const isIdLayout = isIdLayoutMode(currentLayoutName);
+  const margin = isIdLayout ? 3 : 0; 
+
+  const innerW = slot.w - (margin * 2);
+  const innerH = slot.h - (margin * 2);
+  const minX = (slot.x + margin) + innerW - rect.w;
+  const minY = (slot.y + margin) + innerH - rect.h;
+  const maxX = (slot.x + margin);
+  const maxY = (slot.y + margin);
   return {
     x: Math.min(maxX, Math.max(minX, rect.x)),
     y: Math.min(maxY, Math.max(minY, rect.y)),
   };
 }
 
+// 추출된 svgId 속성의 box 문자열 숫자를 정밀 판독하여 그룹 매핑
 function getIdLayoutGroup(slot, viewBox) {
+  const idStr = String(slot.svgId || "").toLowerCase();
+  
+  const match = idStr.match(/box(\d+)/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    if (num >= 1 && num <= 9) return "35x45";   // 증명사진 섹션 (90도 사전 회전 대상)
+    if (num === 10 || num === 11) return "30x40"; // 여권사진 섹션 (정방향 대상)
+  }
+
+  // 예외 상황 대비 방어 코드 (중심축 분할 연산 보완 구조 백업)
   const middleX = viewBox.w / 2;
   return (slot.x + slot.w / 2) < middleX ? "35x45" : "30x40";
 }
 
-// 래퍼 그룹 변형 처리 (90도 회전 수식 완전 제거)
+// 래퍼 그룹 변형 처리
 function applyImageTransform(imgEl, groupKey, slot) {
   const state = idLayoutState[groupKey];
   if (!state) return;
@@ -392,7 +428,7 @@ function bindSvgEvents(overlaySvg) {
     const deltaX = p.x - start.x;
     const deltaY = p.y - start.y;
     
-    if (currentLayoutName.includes("layout4_id")) {
+    if (isIdLayoutMode(currentLayoutName)) {
       const viewBox = parseViewBox(overlaySvg);
       const targetGroup = getIdLayoutGroup(slot, viewBox);
       const state = idLayoutState[targetGroup];
@@ -400,7 +436,6 @@ function bindSvgEvents(overlaySvg) {
       let correctedDx = deltaX;
       let correctedDy = deltaY;
       
-      // 반전 상태에 따른 마우스 이동 동기화 보정
       if (state.flipX) {
         correctedDx = -correctedDx;
       }
@@ -420,11 +455,11 @@ function bindSvgEvents(overlaySvg) {
         if (getIdLayoutGroup(s, viewBox) === targetGroup) {
           const imgEl = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
           if (imgEl) {
-            const offsetX = clamped.x - (slot.x + 1);
-            const offsetY = clamped.y - (slot.y + 1);
+            const offsetX = clamped.x - (slot.x + 3);
+            const offsetY = clamped.y - (slot.y + 3);
             
-            imgEl.setAttribute("x", (s.x + 1) + offsetX);
-            imgEl.setAttribute("y", (s.y + 1) + offsetY);
+            imgEl.setAttribute("x", (s.x + 3) + offsetX);
+            imgEl.setAttribute("y", (s.y + 3) + offsetY);
           }
         }
       });
@@ -467,8 +502,9 @@ function bindSvgEvents(overlaySvg) {
     let nextW = rect.w * scaleFactor;
     let nextH = rect.h * scaleFactor;
     
-    const innerW = slot.w - 2;
-    const innerH = slot.h - 2;
+    const margin = isIdLayoutMode(currentLayoutName) ? 3 : 0;
+    const innerW = slot.w - (margin * 2);
+    const innerH = slot.h - (margin * 2);
     const minScale = Math.max(innerW / naturalW, innerH / naturalH);
     const minW = naturalW * minScale;
     const minH = naturalH * minScale;
@@ -488,7 +524,7 @@ function bindSvgEvents(overlaySvg) {
     };
     const clamped = clampImageToSlot(slot, nextRect);
 
-    if (currentLayoutName.includes("layout4_id")) {
+    if (isIdLayoutMode(currentLayoutName)) {
       const viewBox = parseViewBox(overlaySvg);
       const targetGroup = getIdLayoutGroup(slot, viewBox);
       
@@ -496,11 +532,11 @@ function bindSvgEvents(overlaySvg) {
         if (getIdLayoutGroup(s, viewBox) === targetGroup) {
           const imgEl = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
           if (imgEl) {
-            const offsetX = clamped.x - (slot.x + 1);
-            const offsetY = clamped.y - (slot.y + 1);
+            const offsetX = clamped.x - (slot.x + 3);
+            const offsetY = clamped.y - (slot.y + 3);
             
-            imgEl.setAttribute("x", (s.x + 1) + offsetX);
-            imgEl.setAttribute("y", (s.y + 1) + offsetY);
+            imgEl.setAttribute("x", (s.x + 3) + offsetX);
+            imgEl.setAttribute("y", (s.y + 3) + offsetY);
             imgEl.setAttribute("width", nextW);
             imgEl.setAttribute("height", nextH);
           }
@@ -524,8 +560,8 @@ function renderImageToSlot(overlaySvg, s, dataUrl, groupKey) {
 
   const img = new Image();
   img.onload = () => {
-    const isIdLayout = currentLayoutName.includes("layout4_id");
-    const margin = isIdLayout ? 1 : 0; // layout4_id 일 때만 사방 1px 공백 마진 배치
+    const isIdLayout = isIdLayoutMode(currentLayoutName);
+    const margin = isIdLayout ? 3 : 0; 
     
     const targetX = rect.x + margin;
     const targetY = rect.y + margin;
@@ -703,7 +739,7 @@ async function setFrame(fileName) {
   canvas.setBackgroundColor("transparent", canvas.renderAll.bind(canvas));
   canvas.renderAll();
 
-  if (fileName.includes("layout4_id")) {
+  if (isIdLayoutMode(fileName)) {
     idLayoutCtrls.style.display = "flex";
     
     const overlaySvg = svgOverlay.querySelector("svg");
@@ -730,11 +766,12 @@ fileInput.addEventListener("change", () => {
     const overlaySvg = svgOverlay.querySelector("svg");
     if (!overlaySvg) return;
 
-    if (currentLayoutName.includes("layout4_id")) {
+    if (isIdLayoutMode(currentLayoutName)) {
       const viewBox = parseViewBox(overlaySvg);
       const selectedSlot = slots[activeSlotIndex];
       const targetGroup = getIdLayoutGroup(selectedSlot, viewBox);
       
+      // 고유 ID가 box1 ~ box9 범위일 때만 90도 사전 회전하여 올려줌
       if (targetGroup === "35x45") {
         dataUrl = await rotateImage90Deg(dataUrl);
       }
@@ -769,7 +806,7 @@ function updateGroupTransforms(groupKey) {
   });
 }
 
-// 35x45 컨트롤 핸들러 (회전 제거)
+// box1 ~ box9 컨트롤 핸들러
 flipLeftBtn.addEventListener("click", () => {
   idLayoutState["35x45"].flipX = !idLayoutState["35x45"].flipX;
   updateGroupTransforms("35x45");
@@ -780,7 +817,7 @@ flipVLeftBtn.addEventListener("click", () => {
   updateGroupTransforms("35x45");
 });
 
-// 30x40 컨트롤 핸들러 (회전 제거)
+// box10, box11 컨트롤 핸들러
 flipRightBtn.addEventListener("click", () => {
   idLayoutState["30x40"].flipX = !idLayoutState["30x40"].flipX;
   updateGroupTransforms("30x40");
