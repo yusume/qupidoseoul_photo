@@ -20,10 +20,10 @@ const logoColorInput = document.getElementById("logoColor");
 
 // layout4_id 전용 DOM 요소
 const idLayoutCtrls = document.getElementById("idLayoutCtrls");
-const rotateLeftBtn = document.getElementById("rotateLeftBtn");
+// const rotateLeftBtn = document.getElementById("rotateLeftBtn");
 const flipLeftBtn = document.getElementById("flipLeftBtn");
 const flipVLeftBtn = document.getElementById("flipVLeftBtn"); // 상하반전 추가
-const rotateRightBtn = document.getElementById("rotateRightBtn");
+// const rotateRightBtn = document.getElementById("rotateRightBtn");
 const flipRightBtn = document.getElementById("flipRightBtn");
 const flipVRightBtn = document.getElementById("flipVRightBtn"); // 상하반전 추가
 
@@ -773,10 +773,10 @@ function updateGroupTransforms(groupKey) {
 }
 
 // 35x45 컨트롤 핸들러
-rotateLeftBtn.addEventListener("click", () => {
-  idLayoutState["35x45"].rotate = (idLayoutState["35x45"].rotate + 90) % 360;
-  updateGroupTransforms("35x45");
-});
+// rotateLeftBtn.addEventListener("click", () => {
+//   idLayoutState["35x45"].rotate = (idLayoutState["35x45"].rotate + 90) % 360;
+//   updateGroupTransforms("35x45");
+// });
 
 flipLeftBtn.addEventListener("click", () => {
   idLayoutState["35x45"].flipX = !idLayoutState["35x45"].flipX;
@@ -789,10 +789,10 @@ flipVLeftBtn.addEventListener("click", () => { // 상하반전 핸들러 추가
 });
 
 // 30x40 컨트롤 핸들러
-rotateRightBtn.addEventListener("click", () => {
-  idLayoutState["30x40"].rotate = (idLayoutState["30x40"].rotate + 90) % 360;
-  updateGroupTransforms("30x40");
-});
+// rotateRightBtn.addEventListener("click", () => {
+//   idLayoutState["30x40"].rotate = (idLayoutState["30x40"].rotate + 90) % 360;
+//   updateGroupTransforms("30x40");
+// });
 
 flipRightBtn.addEventListener("click", () => {
   idLayoutState["30x40"].flipX = !idLayoutState["30x40"].flipX;
