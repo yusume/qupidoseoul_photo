@@ -18,14 +18,12 @@ const layoutSelect = document.getElementById("layoutSelect");
 const exportBtn = document.getElementById("exportBtn");
 const logoColorInput = document.getElementById("logoColor");
 
-// layout4_id 전용 DOM 요소
+// layout4_id 전용 DOM 요소 (회전 버튼 변수 제거)
 const idLayoutCtrls = document.getElementById("idLayoutCtrls");
-// const rotateLeftBtn = document.getElementById("rotateLeftBtn");
 const flipLeftBtn = document.getElementById("flipLeftBtn");
-const flipVLeftBtn = document.getElementById("flipVLeftBtn"); // 상하반전 추가
-// const rotateRightBtn = document.getElementById("rotateRightBtn");
+const flipVLeftBtn = document.getElementById("flipVLeftBtn");
 const flipRightBtn = document.getElementById("flipRightBtn");
-const flipVRightBtn = document.getElementById("flipVRightBtn"); // 상하반전 추가
+const flipVRightBtn = document.getElementById("flipVRightBtn");
 
 const EXPORT_DPI = 300;
 const EXPORT_MM_W = 100;
@@ -39,10 +37,10 @@ let currentBackground = "#111";
 let dragState = null;
 let currentLayoutName = "";
 
-// layout4_id 상태 관리 (35x45 구역 및 30x40 구역 독립 제어)
+// layout4_id 상태 관리 (rotate 상태값 제거)
 const idLayoutState = {
-  "35x45": { dataUrl: null, rotate: 0, flipX: false, flipY: false },
-  "30x40": { dataUrl: null, rotate: 0, flipX: false, flipY: false }
+  "35x45": { dataUrl: null, flipX: false, flipY: false },
+  "30x40": { dataUrl: null, flipX: false, flipY: false }
 };
 
 function parseViewBox(svgEl) {
@@ -81,6 +79,7 @@ function getHref(el) {
   );
 }
 
+// 사각형 영역 해석
 function resolveUseRect(useEl, svgRoot) {
   const href = getHref(useEl);
   if (!href || !href.startsWith("#")) return null;
@@ -286,7 +285,6 @@ function bringLogoToFront(svgRoot) {
   logo.parentNode.appendChild(logo);
 }
 
-// 로고 색상 업데이트
 function updateLogoColor(color, svgRoot) {
   const root = svgRoot || svgOverlay.querySelector("svg");
   if (!root) return;
@@ -302,11 +300,14 @@ function updateLogoColor(color, svgRoot) {
   });
 }
 
+// 여백 1px 반영 범위 계산기
 function clampImageToSlot(slot, rect) {
-  const minX = slot.x + slot.w - rect.w;
-  const minY = slot.y + slot.h - rect.h;
-  const maxX = slot.x;
-  const maxY = slot.y;
+  const innerW = slot.w - 2;
+  const innerH = slot.h - 2;
+  const minX = (slot.x + 1) + innerW - rect.w;
+  const minY = (slot.y + 1) + innerH - rect.h;
+  const maxX = (slot.x + 1);
+  const maxY = (slot.y + 1);
   return {
     x: Math.min(maxX, Math.max(minX, rect.x)),
     y: Math.min(maxY, Math.max(minY, rect.y)),
@@ -318,7 +319,7 @@ function getIdLayoutGroup(slot, viewBox) {
   return (slot.x + slot.w / 2) < middleX ? "35x45" : "30x40";
 }
 
-// 상하반전(flipY) 기능이 추가 반영된 변형 연산기
+// 래퍼 그룹 변형 처리 (90도 회전 수식 완전 제거)
 function applyImageTransform(imgEl, groupKey, slot) {
   const state = idLayoutState[groupKey];
   if (!state) return;
@@ -331,16 +332,10 @@ function applyImageTransform(imgEl, groupKey, slot) {
 
   let transformString = "";
   
-  if (state.rotate !== 0) {
-    transformString += `rotate(${state.rotate}, ${cx}, ${cy}) `;
-  }
-  
-  // 좌우 반전 적용
   if (state.flipX) {
     transformString += `translate(${cx}, ${cy}) scale(-1, 1) translate(${-cx}, ${-cy}) `;
   }
 
-  // 상하 반전 적용 (추가)
   if (state.flipY) {
     transformString += `translate(${cx}, ${cy}) scale(1, -1) translate(${-cx}, ${-cy}) `;
   }
@@ -405,20 +400,11 @@ function bindSvgEvents(overlaySvg) {
       let correctedDx = deltaX;
       let correctedDy = deltaY;
       
-      if (state.rotate === 90) {
-        correctedDx = deltaY;
-        correctedDy = -deltaX;
-      } else if (state.rotate === 180) {
-        correctedDx = -deltaX;
-        correctedDy = -deltaY;
-      } else if (state.rotate === 270) {
-        correctedDx = -deltaY;
-        correctedDy = deltaX;
-      }
+      // 반전 상태에 따른 마우스 이동 동기화 보정
       if (state.flipX) {
         correctedDx = -correctedDx;
       }
-      if (state.flipY) { // 상하반전 드래그 축 보정
+      if (state.flipY) {
         correctedDy = -correctedDy;
       }
 
@@ -434,11 +420,11 @@ function bindSvgEvents(overlaySvg) {
         if (getIdLayoutGroup(s, viewBox) === targetGroup) {
           const imgEl = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
           if (imgEl) {
-            const offsetX = clamped.x - slot.x;
-            const offsetY = clamped.y - slot.y;
+            const offsetX = clamped.x - (slot.x + 1);
+            const offsetY = clamped.y - (slot.y + 1);
             
-            imgEl.setAttribute("x", s.x + offsetX);
-            imgEl.setAttribute("y", s.y + offsetY);
+            imgEl.setAttribute("x", (s.x + 1) + offsetX);
+            imgEl.setAttribute("y", (s.y + 1) + offsetY);
           }
         }
       });
@@ -480,7 +466,10 @@ function bindSvgEvents(overlaySvg) {
 
     let nextW = rect.w * scaleFactor;
     let nextH = rect.h * scaleFactor;
-    const minScale = Math.max(slot.w / naturalW, slot.h / naturalH);
+    
+    const innerW = slot.w - 2;
+    const innerH = slot.h - 2;
+    const minScale = Math.max(innerW / naturalW, innerH / naturalH);
     const minW = naturalW * minScale;
     const minH = naturalH * minScale;
 
@@ -507,11 +496,11 @@ function bindSvgEvents(overlaySvg) {
         if (getIdLayoutGroup(s, viewBox) === targetGroup) {
           const imgEl = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
           if (imgEl) {
-            const offsetX = clamped.x - slot.x;
-            const offsetY = clamped.y - slot.y;
+            const offsetX = clamped.x - (slot.x + 1);
+            const offsetY = clamped.y - (slot.y + 1);
             
-            imgEl.setAttribute("x", s.x + offsetX);
-            imgEl.setAttribute("y", s.y + offsetY);
+            imgEl.setAttribute("x", (s.x + 1) + offsetX);
+            imgEl.setAttribute("y", (s.y + 1) + offsetY);
             imgEl.setAttribute("width", nextW);
             imgEl.setAttribute("height", nextH);
           }
@@ -535,13 +524,21 @@ function renderImageToSlot(overlaySvg, s, dataUrl, groupKey) {
 
   const img = new Image();
   img.onload = () => {
-    const naturalW = img.naturalWidth || rect.w;
-    const naturalH = img.naturalHeight || rect.h;
-    const scale = Math.max(rect.w / naturalW, rect.h / naturalH);
+    const isIdLayout = currentLayoutName.includes("layout4_id");
+    const margin = isIdLayout ? 1 : 0; // layout4_id 일 때만 사방 1px 공백 마진 배치
+    
+    const targetX = rect.x + margin;
+    const targetY = rect.y + margin;
+    const targetW = rect.w - (margin * 2);
+    const targetH = rect.h - (margin * 2);
+
+    const naturalW = img.naturalWidth || targetW;
+    const naturalH = img.naturalHeight || targetH;
+    const scale = Math.max(targetW / naturalW, targetH / naturalH);
     const w = naturalW * scale;
     const h = naturalH * scale;
-    const x = rect.x + (rect.w - w) / 2;
-    const y = rect.y + (rect.h - h) / 2;
+    const x = targetX + (targetW - w) / 2;
+    const y = targetY + (targetH - h) / 2;
 
     const defs = ensureDefs(overlaySvg);
     const clipId = `clip-${s.id}`;
@@ -555,10 +552,10 @@ function renderImageToSlot(overlaySvg, s, dataUrl, groupKey) {
     }
 
     const clipRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    clipRect.setAttribute("x", rect.x);
-    clipRect.setAttribute("y", rect.y);
-    clipRect.setAttribute("width", rect.w);
-    clipRect.setAttribute("height", rect.h);
+    clipRect.setAttribute("x", targetX);
+    clipRect.setAttribute("y", targetY);
+    clipRect.setAttribute("width", targetW);
+    clipRect.setAttribute("height", targetH);
     clipPath.appendChild(clipRect);
 
     const existing = overlaySvg.querySelector(`image[data-slot="${s.id}"]`);
@@ -593,7 +590,7 @@ function renderImageToSlot(overlaySvg, s, dataUrl, groupKey) {
     const group = slotEl.closest("g.image_box, g#image_box") || overlaySvg;
     group.appendChild(wrapperGroup);
 
-    if (currentLayoutName.includes("layout4_id") && groupKey) {
+    if (isIdLayout && groupKey) {
       applyImageTransform(imgEl, groupKey, s);
     }
 
@@ -772,34 +769,24 @@ function updateGroupTransforms(groupKey) {
   });
 }
 
-// 35x45 컨트롤 핸들러
-// rotateLeftBtn.addEventListener("click", () => {
-//   idLayoutState["35x45"].rotate = (idLayoutState["35x45"].rotate + 90) % 360;
-//   updateGroupTransforms("35x45");
-// });
-
+// 35x45 컨트롤 핸들러 (회전 제거)
 flipLeftBtn.addEventListener("click", () => {
   idLayoutState["35x45"].flipX = !idLayoutState["35x45"].flipX;
   updateGroupTransforms("35x45");
 });
 
-flipVLeftBtn.addEventListener("click", () => { // 상하반전 핸들러 추가
+flipVLeftBtn.addEventListener("click", () => {
   idLayoutState["35x45"].flipY = !idLayoutState["35x45"].flipY;
   updateGroupTransforms("35x45");
 });
 
-// 30x40 컨트롤 핸들러
-// rotateRightBtn.addEventListener("click", () => {
-//   idLayoutState["30x40"].rotate = (idLayoutState["30x40"].rotate + 90) % 360;
-//   updateGroupTransforms("30x40");
-// });
-
+// 30x40 컨트롤 핸들러 (회전 제거)
 flipRightBtn.addEventListener("click", () => {
   idLayoutState["30x40"].flipX = !idLayoutState["30x40"].flipX;
   updateGroupTransforms("30x40");
 });
 
-flipVRightBtn.addEventListener("click", () => { // 상하반전 핸들러 추가
+flipVRightBtn.addEventListener("click", () => {
   idLayoutState["30x40"].flipY = !idLayoutState["30x40"].flipY;
   updateGroupTransforms("30x40");
 });
