@@ -92,6 +92,74 @@ button:hover{ filter:brightness(1.05); }
   display:block;
 }
 
+/* ── 필터 패널 ───────────────────────────── */
+#filterPanel {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 14px;
+}
+.filter-panel-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.filter-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: bold;
+  white-space: nowrap;
+}
+.filter-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #101010;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.filter-btn:hover {
+  color: var(--text);
+}
+.filter-btn.active {
+  background: #3a3a3a;
+  color: var(--text);
+  border-color: #666;
+}
+.filter-sliders {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.slider-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: default;
+}
+.slider-ctrl input[type=range] {
+  width: 90px;
+  accent-color: #888;
+  cursor: pointer;
+}
+.slider-ctrl span:last-child {
+  min-width: 22px;
+  text-align: right;
+  color: var(--text);
+  font-size: 11px;
+}
+
 #fileInput{
   display:none;
 }

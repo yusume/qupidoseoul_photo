@@ -33,6 +33,32 @@
       </div>
     </div>
   </header>
+  <!-- 필터 패널 -->
+  <div id="filterPanel" style="display:none;">
+    <div class="filter-panel-inner">
+      <span class="filter-label">필터</span>
+      <div class="filter-btns">
+        <button class="filter-btn active" data-filter="none">원본</button>
+        <button class="filter-btn" data-filter="grayscale">흑백</button>
+        <button class="filter-btn" data-filter="sepia">세피아</button>
+        <button class="filter-btn" data-filter="vintage">빈티지</button>
+        <button class="filter-btn" data-filter="sharpen">선명</button>
+      </div>
+      <div class="filter-sliders" id="brightnessSliders">
+        <label class="slider-ctrl">
+          <span>밝기</span>
+          <input type="range" id="brightnessInput" min="-100" max="100" value="0" />
+          <span id="brightnessVal">0</span>
+        </label>
+        <label class="slider-ctrl">
+          <span>대비</span>
+          <input type="range" id="contrastInput" min="-100" max="100" value="0" />
+          <span id="contrastVal">0</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
   <main class="stage">
    <div id="canvasWrap" style="position:relative; width:100mm; height:150mm;">
       <canvas id="c"></canvas>
