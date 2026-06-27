@@ -39,108 +39,6 @@ let currentLayoutName = "";
 // 안쪽 여백 설정 (3px)
 const INNER_MARGIN = 3;
 
-// 슬롯별 필터 상태: { filter: 'none'|'grayscale'|'sepia'|'vintage'|'sharpen', brightness: 0, contrast: 0 }
-const slotFilters = {};
-let activeFilterSlotId = null;
-
-function getSlotFilter(slotId) {
-  return slotFilters[slotId] || { filter: "none", brightness: 0, contrast: 0 };
-}
-
-// SVG filter 정의 등록
-const SVG_FILTER_DEFS = {
-  grayscale: `
-    <feColorMatrix type="saturate" values="0"/>`,
-  sepia: `
-    <feColorMatrix type="matrix" values="
-      0.393 0.769 0.189 0 0
-      0.349 0.686 0.168 0 0
-      0.272 0.534 0.131 0 0
-      0     0     0     1 0"/>`,
-  vintage: `
-    <feColorMatrix type="matrix" values="
-      0.9  0.1  0.1  0  0.04
-      0.05 0.85 0.05 0  0.02
-      0.05 0.05 0.75 0  0
-      0    0    0    1  0"/>
-    <feComponentTransfer>
-      <feFuncR type="gamma" amplitude="1" exponent="1.1" offset="0.03"/>
-      <feFuncG type="gamma" amplitude="1" exponent="1.05" offset="0"/>
-      <feFuncB type="gamma" amplitude="0.9" exponent="1.2" offset="0"/>
-    </feComponentTransfer>`,
-  sharpen: `
-    <feConvolveMatrix order="3" kernelMatrix="
-       0 -1  0
-      -1  5 -1
-       0 -1  0" preserveAlpha="true"/>`,
-};
-
-function buildFilterId(slotId, filterState) {
-  const { filter, brightness, contrast } = filterState;
-  const hasBc = brightness !== 0 || contrast !== 0;
-  if (filter === "none" && !hasBc) return null;
-  return `svgf-${slotId}-${filter}-b${brightness}-c${contrast}`.replace(/[^a-zA-Z0-9-]/g, "_");
-}
-
-function ensureSlotFilter(overlaySvg, slotId) {
-  const state = getSlotFilter(slotId);
-  const defs = ensureDefs(overlaySvg);
-
-  // 이 슬롯의 기존 필터 제거
-  defs.querySelectorAll(`[id^="svgf-${slotId}-"]`).forEach((el) => el.remove());
-
-  const filterId = buildFilterId(slotId, state);
-  if (!filterId) return null;
-
-  const { filter, brightness, contrast } = state;
-  const hasBc = brightness !== 0 || contrast !== 0;
-
-  let primitives = "";
-  if (filter !== "none" && SVG_FILTER_DEFS[filter]) {
-    primitives += SVG_FILTER_DEFS[filter];
-  }
-  if (hasBc) {
-    // brightness: -100~100 → slope 0.2~2.0
-    const bSlope = brightness >= 0
-      ? 1 + (brightness / 100) * 1.0
-      : 1 + (brightness / 100) * 0.8;
-    const bOffset = 0;
-    // contrast: -100~100 → slope 0.1~3.0
-    const cSlope = contrast >= 0
-      ? 1 + (contrast / 100) * 2.0
-      : 1 + (contrast / 100) * 0.9;
-    const cOffset = contrast >= 0 ? 0 : (contrast / 100) * 0.1;
-    primitives += `
-    <feComponentTransfer result="bc">
-      <feFuncR type="linear" slope="${bSlope * cSlope}" intercept="${bOffset + cOffset}"/>
-      <feFuncG type="linear" slope="${bSlope * cSlope}" intercept="${bOffset + cOffset}"/>
-      <feFuncB type="linear" slope="${bSlope * cSlope}" intercept="${bOffset + cOffset}"/>
-    </feComponentTransfer>`;
-  }
-
-  const filterEl = document.createElementNS("http://www.w3.org/2000/svg", "filter");
-  filterEl.setAttribute("id", filterId);
-  filterEl.setAttribute("color-interpolation-filters", "sRGB");
-  filterEl.setAttribute("x", "0%");
-  filterEl.setAttribute("y", "0%");
-  filterEl.setAttribute("width", "100%");
-  filterEl.setAttribute("height", "100%");
-  filterEl.innerHTML = primitives;
-  defs.appendChild(filterEl);
-  return filterId;
-}
-
-function applySlotFilter(overlaySvg, slotId) {
-  const filterId = ensureSlotFilter(overlaySvg, slotId);
-  const wrapperGroup = overlaySvg.querySelector(`g[data-wrapper="${slotId}"]`);
-  if (!wrapperGroup) return;
-  if (filterId) {
-    wrapperGroup.setAttribute("filter", `url(#${filterId})`);
-  } else {
-    wrapperGroup.removeAttribute("filter");
-  }
-}
-
 // layout4_id 상태 관리
 const idLayoutState = {
   "35x45": { dataUrl: null, flipX: false, flipY: false },
@@ -227,8 +125,7 @@ function getSvgPoint(svgEl, clientX, clientY) { //
 
 function extractSlots(svgRoot, viewBox) { //
   let elements = [];
-  // layout3처럼 image_box 그룹 안에 full-canvas rect만 있는 경우 단일 슬롯으로 처리할지 여부
-  let allowFullCanvas = false;
+  let allowFullCanvas = false; // layout3처럼 슬롯이 캔버스 전체인 경우
 
   if (currentLayoutName.includes("layout4_id")) {
     elements = Array.from(svgRoot.querySelectorAll("rect, use")).filter(
@@ -243,23 +140,17 @@ function extractSlots(svgRoot, viewBox) { //
       const idFiltered = rawElements.filter((el) => //
         /^image_box_/i.test(el.getAttribute("id") || "") //
       ); //
-      const selected = idFiltered.length ? idFiltered : rawElements;
+      // id 필터 우선, 없으면 전체 — 단 rect+use 중복이면 rect만 유지
+      let selected = idFiltered.length ? idFiltered : rawElements;
+      if (!idFiltered.length) {
+        const rects = selected.filter((e) => e.tagName.toLowerCase() === "rect");
+        const uses  = selected.filter((e) => e.tagName.toLowerCase() === "use");
+        if (rects.length && uses.length) selected = rects; // rect+use 중복 제거
+      }
       elements.push(...selected);
-      // 후보가 1개뿐이고 id 필터도 없으면 full-canvas 슬롯일 가능성 있음
+      // 후보가 1개이고 id 없는 경우 → 전체캔버스 단일슬롯(layout3) 가능성
       if (selected.length === 1 && !idFiltered.length) allowFullCanvas = true;
     });
-  }
-
-  // layout2처럼 use가 같은 rect를 중복 참조하는 경우 rect만 남기고 use는 제거
-  // (image_box_* id가 없는 레이아웃에서 rect+use 중복 제거)
-  const hasIdRects = elements.some((el) => /^image_box_/i.test(el.getAttribute("id") || ""));
-  if (!hasIdRects) {
-    const rects = elements.filter((el) => el.tagName.toLowerCase() === "rect");
-    const uses = elements.filter((el) => el.tagName.toLowerCase() === "use");
-    // rect와 use가 같은 위치를 중복으로 가리키고 있으면 rect만 유지
-    if (rects.length > 0 && uses.length > 0) {
-      elements = rects;
-    }
   }
 
   const rawOut = [];
@@ -283,7 +174,7 @@ function extractSlots(svgRoot, viewBox) { //
 
     const slotArea = rect.w * rect.h;
     const viewArea = viewBox.w * viewBox.h;
-    // full-canvas 단일 슬롯(layout3 등)은 50% 필터 예외 처리
+    // 전체캔버스 단일슬롯은 50% 필터 예외 처리
     if (slotArea > viewArea * 0.5 && !allowFullCanvas) return;
 
     rawOut.push({
@@ -336,29 +227,25 @@ function assignSlotMarkers(overlayRoot, slotsList) { //
       const idFiltered = rawElements.filter((el) => //
         /^image_box_/i.test(el.getAttribute("id") || "") //
       ); //
-      const selected = idFiltered.length ? idFiltered : rawElements;
+      let selected = idFiltered.length ? idFiltered : rawElements;
+      if (!idFiltered.length) {
+        const rects = selected.filter((e) => e.tagName.toLowerCase() === "rect");
+        const uses  = selected.filter((e) => e.tagName.toLowerCase() === "use");
+        if (rects.length && uses.length) selected = rects;
+      }
       elements.push(...selected);
       if (selected.length === 1 && !idFiltered.length) allowFullCanvas = true;
     });
 
-    // layout2처럼 rect+use 중복 참조 제거
-    const hasIdRects = elements.some((el) => /^image_box_/i.test(el.getAttribute("id") || ""));
-    if (!hasIdRects) {
-      const rects = elements.filter((el) => el.tagName.toLowerCase() === "rect");
-      const uses = elements.filter((el) => el.tagName.toLowerCase() === "use");
-      if (rects.length > 0 && uses.length > 0) elements = rects;
-    }
+    // 50% 필터 (전체캔버스 단일슬롯 예외)
+    elements = elements.filter((el) => {
+      const r = getSlotRectFromElement(el, overlayRoot);
+      if (!r) return false;
+      if (r.w * r.h > viewBox.w * viewBox.h * 0.5 && !allowFullCanvas) return false;
+      return true;
+    });
 
-    // full-canvas가 아닌 경우 거대 배경 rect 제거
-    if (!allowFullCanvas) {
-      elements = elements.filter((el) => {
-        const r = getSlotRectFromElement(el, overlayRoot);
-        if (!r) return false;
-        return (r.w * r.h) <= (viewBox.w * viewBox.h * 0.5);
-      });
-    }
-
-    // extractSlots와 동일한 정렬 적용 → slot 번호가 같은 DOM 요소에 붙도록
+    // extractSlots와 동일 정렬 → slot 번호가 같은 DOM 요소에 붙도록
     elements.sort((a, b) => {
       const rA = getSlotRectFromElement(a, overlayRoot);
       const rB = getSlotRectFromElement(b, overlayRoot);
@@ -403,13 +290,17 @@ function rotateImage90Deg(srcDataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
+      const nw = img.naturalWidth;  // 실제 픽셀 해상도 (CSS픽셀 img.width와 다름)
+      const nh = img.naturalHeight;
       const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = img.height;
-      tempCanvas.height = img.width;
+      tempCanvas.width = nh;   // 90도 회전 후 가로 = 원본 세로
+      tempCanvas.height = nw;  // 90도 회전 후 세로 = 원본 가로
       const ctx = tempCanvas.getContext("2d");
-      ctx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.translate(nh / 2, nw / 2);
       ctx.rotate((90 * Math.PI) / 180);
-      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.drawImage(img, -nw / 2, -nh / 2, nw, nh);
       resolve(tempCanvas.toDataURL("image/png"));
     };
     img.src = srcDataUrl;
@@ -510,9 +401,6 @@ function bindSvgEvents(overlaySvg) { //
     if (!slotId) return; //
     const slot = slots.find((s) => s.id === slotId); //
     if (!slot) return; //
-
-    // 이미지 클릭 → 필터 패널 열기
-    showFilterPanel(slotId);
 
     const rect = {
       x: parseFloat(target.getAttribute("x")) || 0, //
@@ -730,12 +618,6 @@ function renderImageToSlot(overlaySvg, s, dataUrl, groupKey) { //
       applyImageTransform(imgEl, groupKey, s);
     }
 
-    // 슬롯에 저장된 필터 재적용
-    applySlotFilter(overlaySvg, s.id);
-
-    // 필터 패널이 이 슬롯을 보고 있으면 UI 동기화
-    if (activeFilterSlotId === s.id) syncFilterPanelUI(s.id);
-
     bringLogoToFront(overlaySvg); //
     if (logoColorInput) { //
       updateLogoColor(logoColorInput.value, overlaySvg); //
@@ -760,17 +642,17 @@ async function loadSVGOverlay(url) { //
     }
     const slotGroups = overlayRoot.querySelectorAll("g.image_box, g#image_box"); //
     slotGroups.forEach((group) => { //
-      const rawElements = Array.from(group.querySelectorAll("rect, use")).filter( //
+      const rawEls = Array.from(group.querySelectorAll("rect, use")).filter( //
         (el) => !isInsideDefsOrClip(el) //
       ); //
-      const idFiltered = rawElements.filter((el) => //
+      const idFiltered = rawEls.filter((el) => //
         /^image_box_/i.test(el.getAttribute("id") || "") //
       ); //
-      let targets = idFiltered.length ? idFiltered : rawElements;
-      // rect+use 중복 제거: rect가 있으면 use는 fill 숨김 불필요
+      let targets = idFiltered.length ? idFiltered : rawEls;
+      // rect+use 중복이면 rect만 투명 처리
       if (!idFiltered.length) {
-        const rects = targets.filter((el) => el.tagName.toLowerCase() === "rect");
-        if (rects.length > 0) targets = rects;
+        const rects = targets.filter((e) => e.tagName.toLowerCase() === "rect");
+        if (rects.length) targets = rects;
       }
       targets.forEach((el) => { //
         el.style.fill = "none"; //
@@ -842,7 +724,6 @@ async function setFrame(fileName) { //
   parsedSlots.forEach((s) => slots.push({ ...s })); //
 
   activeSlotIndex = null; //
-  hideFilterPanel();
   canvas.clear(); //
   canvas.setBackgroundColor("transparent", canvas.renderAll.bind(canvas)); //
   canvas.renderAll(); //
@@ -935,41 +816,99 @@ flipVRightBtn.addEventListener("click", () => {
 });
 
 if (exportBtn) { //
-  exportBtn.addEventListener("click", () => { //
+  exportBtn.addEventListener("click", async () => {
     const exportW = Math.round((EXPORT_MM_W / MM_PER_INCH) * EXPORT_DPI); //
     const exportH = Math.round((EXPORT_MM_H / MM_PER_INCH) * EXPORT_DPI); //
     const liveSvg = svgOverlay.querySelector("svg"); //
     if (!liveSvg) return; //
-    const clone = liveSvg.cloneNode(true); //
-    if (!clone.getAttribute("xmlns")) { //
-      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg"); //
-    }
-    if (!clone.getAttribute("xmlns:xlink")) { //
-      clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink"); //
-    }
-    clone.setAttribute("width", exportW); //
-    clone.setAttribute("height", exportH); //
 
-    const svgText = new XMLSerializer().serializeToString(clone); //
-    const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }); //
-    const svgUrl = URL.createObjectURL(svgBlob); //
+    const viewBox = parseViewBox(liveSvg);
+    const scaleX = exportW / viewBox.w;
+    const scaleY = exportH / viewBox.h;
 
-    const svgImg = new Image(); //
-    svgImg.onload = () => { //
-      const tempCanvas = document.createElement("canvas"); //
-      tempCanvas.width = exportW; //
-      tempCanvas.height = exportH; //
-      const ctx = tempCanvas.getContext("2d"); //
-      ctx.drawImage(svgImg, 0, 0, exportW, exportH); //
+    // Step 1: 슬롯 이미지 정보 수집 (href=원본 dataUrl, 위치/크기/clipPath)
+    const slotImages = Array.from(liveSvg.querySelectorAll("image[data-slot]")).map((el) => {
+      const slotId = el.getAttribute("data-slot");
+      const clipPathAttr = el.getAttribute("clip-path") || el.closest("[clip-path]")?.getAttribute("clip-path") || "";
+      const clipId = clipPathAttr.match(/url\(#([^)]+)\)/)?.[1] || `clip-${slotId}`;
+      const cp = liveSvg.querySelector(`#${clipId} rect`);
+      return {
+        href: el.getAttribute("href") || el.getAttributeNS("http://www.w3.org/1999/xlink", "href"),
+        x: parseFloat(el.getAttribute("x")) || 0,
+        y: parseFloat(el.getAttribute("y")) || 0,
+        w: parseFloat(el.getAttribute("width")) || 0,
+        h: parseFloat(el.getAttribute("height")) || 0,
+        clip: cp ? {
+          x: parseFloat(cp.getAttribute("x")) || 0,
+          y: parseFloat(cp.getAttribute("y")) || 0,
+          w: parseFloat(cp.getAttribute("width")) || 0,
+          h: parseFloat(cp.getAttribute("height")) || 0,
+        } : null,
+        slotId,
+      };
+    });
 
-      const link = document.createElement("a"); //
-      link.download = "photo_frame.png"; //
-      link.href = tempCanvas.toDataURL("image/png"); //
-      link.click(); //
+    // Step 2: 슬롯 이미지 제거한 프레임 전용 clone
+    const frameClone = liveSvg.cloneNode(true);
+    if (!frameClone.getAttribute("xmlns")) frameClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    if (!frameClone.getAttribute("xmlns:xlink")) frameClone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    frameClone.setAttribute("width", exportW);
+    frameClone.setAttribute("height", exportH);
+    // 이미지 wrapper g 제거
+    frameClone.querySelectorAll("g[data-wrapper]").forEach((g) => g.remove());
+    // 슬롯 rect 투명화
+    frameClone.querySelectorAll("[data-slot]").forEach((el) => {
+      el.style.fill = "none";
+      el.style.fillOpacity = "0";
+    });
 
-      URL.revokeObjectURL(svgUrl); //
-    };
-    svgImg.src = svgUrl; //
+    // Step 3: export canvas
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = exportW;
+    tempCanvas.height = exportH;
+    const ctx = tempCanvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    // Step 4: 슬롯 이미지를 canvas에 직접 원본 해상도로 그리기
+    await Promise.all(slotImages.map((si) => new Promise((resolve) => {
+      if (!si.href) { resolve(); return; }
+      const img = new Image();
+      img.onload = () => {
+        ctx.save();
+        if (si.clip) {
+          ctx.beginPath();
+          ctx.rect(si.clip.x * scaleX, si.clip.y * scaleY, si.clip.w * scaleX, si.clip.h * scaleY);
+          ctx.clip();
+        }
+        ctx.drawImage(img, si.x * scaleX, si.y * scaleY, si.w * scaleX, si.h * scaleY);
+        ctx.restore();
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = si.href;
+    })));
+
+    // Step 5: 프레임 SVG를 이미지 위에 오버레이 (로고/테두리/텍스트)
+    const frameText = new XMLSerializer().serializeToString(frameClone);
+    const frameBlob = new Blob([frameText], { type: "image/svg+xml;charset=utf-8" });
+    const frameUrl = URL.createObjectURL(frameBlob);
+    await new Promise((resolve) => {
+      const frameImg = new Image();
+      frameImg.onload = () => {
+        ctx.drawImage(frameImg, 0, 0, exportW, exportH);
+        URL.revokeObjectURL(frameUrl);
+        resolve();
+      };
+      frameImg.onerror = resolve;
+      frameImg.src = frameUrl;
+    });
+
+    // Step 6: PNG 다운로드
+    const link = document.createElement("a"); //
+    link.download = "photo_frame.png"; //
+    link.href = tempCanvas.toDataURL("image/png"); //
+    link.click(); //
   });
 }
 
@@ -1005,75 +944,3 @@ if (logoColorInput) { //
 
   await setFrame(frames[0]); //
 })();
-// ── 필터 패널 UI ─────────────────────────────────────────────────
-const filterPanel = document.getElementById("filterPanel");
-const filterBtns = document.querySelectorAll(".filter-btn");
-const brightnessInput = document.getElementById("brightnessInput");
-const contrastInput = document.getElementById("contrastInput");
-const brightnessVal = document.getElementById("brightnessVal");
-const contrastVal = document.getElementById("contrastVal");
-
-function showFilterPanel(slotId) {
-  activeFilterSlotId = slotId;
-  filterPanel.style.display = "block";
-  syncFilterPanelUI(slotId);
-}
-
-function hideFilterPanel() {
-  filterPanel.style.display = "none";
-  activeFilterSlotId = null;
-  filterBtns.forEach((b) => b.classList.remove("active"));
-  document.querySelector('.filter-btn[data-filter="none"]')?.classList.add("active");
-}
-
-function syncFilterPanelUI(slotId) {
-  const state = getSlotFilter(slotId);
-  filterBtns.forEach((b) => {
-    b.classList.toggle("active", b.dataset.filter === state.filter);
-  });
-  brightnessInput.value = state.brightness;
-  contrastInput.value = state.contrast;
-  brightnessVal.textContent = state.brightness;
-  contrastVal.textContent = state.contrast;
-}
-
-filterBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    if (!activeFilterSlotId) return;
-    const f = btn.dataset.filter;
-    const state = getSlotFilter(activeFilterSlotId);
-    slotFilters[activeFilterSlotId] = { ...state, filter: f };
-    filterBtns.forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    const overlaySvg = svgOverlay.querySelector("svg");
-    if (overlaySvg) applySlotFilter(overlaySvg, activeFilterSlotId);
-  });
-});
-
-brightnessInput.addEventListener("input", () => {
-  if (!activeFilterSlotId) return;
-  const v = parseInt(brightnessInput.value);
-  brightnessVal.textContent = v;
-  const state = getSlotFilter(activeFilterSlotId);
-  slotFilters[activeFilterSlotId] = { ...state, brightness: v };
-  const overlaySvg = svgOverlay.querySelector("svg");
-  if (overlaySvg) applySlotFilter(overlaySvg, activeFilterSlotId);
-});
-
-contrastInput.addEventListener("input", () => {
-  if (!activeFilterSlotId) return;
-  const v = parseInt(contrastInput.value);
-  contrastVal.textContent = v;
-  const state = getSlotFilter(activeFilterSlotId);
-  slotFilters[activeFilterSlotId] = { ...state, contrast: v };
-  const overlaySvg = svgOverlay.querySelector("svg");
-  if (overlaySvg) applySlotFilter(overlaySvg, activeFilterSlotId);
-});
-
-// 캔버스 바깥 클릭 시 필터 패널 닫기
-document.addEventListener("click", (e) => {
-  if (!filterPanel || filterPanel.style.display === "none") return;
-  if (filterPanel.contains(e.target)) return;
-  if (canvasWrap.contains(e.target)) return;
-  hideFilterPanel();
-});
